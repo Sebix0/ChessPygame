@@ -23,6 +23,15 @@ class Game:
         sys.exit()
       
       self.Board.handleEvents(event)
+    if not self.Board.whiteKing:
+      print("Black wins")
+      pygame.quit()
+      sys.exit()
+    elif not self.Board.blackKing:
+      print("White wins")
+      pygame.quit()
+      sys.exit()
+
       
     self.Board.drawBoard(self.WIN)
 

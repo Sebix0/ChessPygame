@@ -22,13 +22,16 @@ def checkLetter(fen, Piece):
 
 
 class Board:
-  def __init__(self, fen="8/3P4/8/3Q1p2/2b5/8/8/8"):
+  def __init__(self, fen="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"):
     self.Piece = Pieces()
 
-    self.currentPieceIndex = None
+    self.currentColor = "white"
+    self.currentIndex = None
     self.currentPiece = None
-    self.canCastle = True
+    self.canCastle = [True, True, True, True] # KQkq
     self.enPassantSquare = "-"
+    self.whiteKing = True
+    self.blackKing = True
     self.board = [0 for i in range(64)]
     self.movePlates = MovePlate() # store the current possible moves for the selected piece
     fen = fen.split(' ')[0].split('/') # split fen into each individual row
@@ -58,6 +61,12 @@ class Board:
     pygame.draw.circle(shapeSurf, color, (radius, radius), radius)
     win.blit(shapeSurf, targetRect)
 
+  def convertToColRow(self, index):
+    col = index % 8
+    row = index // 8
+    return (col, row)
+
+  
 
   def drawBoard(self, win):
     col, row = 0, 0
@@ -97,16 +106,70 @@ class Board:
       if not pygame.mouse.get_pressed()[0]:
         return
         
+      #print(self.inCheck())
+      #print(self.check)
       mx, my = pygame.mouse.get_pos() 
       col, row = mx//120, my//120 # squares 120x120 pixels so we can get the locations in terms of rows and columns
 
+
       if len(self.movePlates.moves) > 0:
+
         if (col, row, True) in self.movePlates.moves or (col, row, False) in self.movePlates.moves:
+          if self.currentPiece%8 == self.Piece.Rook and self.currentIndex == 63:
+            self.canCastle[0] = False
+          if self.currentPiece%8 == self.Piece.Rook and self.currentIndex == 56:
+            self.canCastle[1] = False
+          if self.currentPiece%8 == self.Piece.Rook and self.currentIndex == 0:
+            self.canCastle[3] = False
+          if self.currentPiece%8 == self.Piece.Rook and self.currentIndex == 7:
+            self.canCastle[2] = False
+          if self.currentPiece%8 == self.Piece.King and self.Piece.getColor(self.currentPiece) == "white":
+            self.canCastle[0] = False
+            self.canCastle[1] = False
+          if self.currentPiece%8 == self.Piece.King and self.Piece.getColor(self.currentPiece) == "black":
+            self.canCastle[2] = False
+            self.canCastle[3] = False
+          if col == 7 and row == 7:
+            self.canCastle[0] = False
+          elif col == 0 and row == 7:
+            self.canCastle[1] = False
+          elif col == 7 and row == 0:
+            self.canCastle[2] = False
+          elif col == 0 and row == 0:
+            self.canCastle[3] = False
+
+          
+          if self.currentPiece%8 == self.Piece.King:
+            old_col, old_row = self.convertToColRow(self.currentIndex)
+            if old_col - col == -2 and row == 7:
+              self.board[61] = self.Piece.Rook + self.Piece.White
+              self.board[63] = 0
+            elif old_col - col == 2 and row == 7:
+              self.board[59] = self.Piece.Rook + self.Piece.White
+              self.board[56] = 0
+            elif old_col - col == -2 and row == 0:
+              self.board[5] = self.Piece.Rook + self.Piece.Black
+              self.board[7] = 0
+            elif old_col - col == 2 and row == 0:
+              self.board[3] = self.Piece.Rook + self.Piece.Black
+              self.board[0] = 0
+
+          if self.board[row*8 + col]%8 == self.Piece.King:
+            if self.Piece.getColor(self.board[row*8 + col]) == "white":
+              self.whiteKing = False
+            elif self.Piece.getColor(self.board[row*8 + col]) == "black":
+              self.blackKing = False
+            
+
           self.board[row*8 + col] = self.currentPiece
-          self.board[self.currentPieceIndex] = 0
-          self.currentPieceIndex = None
+          self.board[self.currentIndex] = 0
+          self.currentIndex = None
           self.currentPiece = None
           self.movePlates.moves = []
+          if self.currentColor == "white":
+            self.currentColor =  "black"
+          elif self.currentColor == "black":
+            self.currentColor = "white"
           return
         else:
           self.movePlates.moves = []
@@ -115,10 +178,12 @@ class Board:
       pieceClicked = self.getPieceOnBoard(col, row) # get the value of the piece clicked
 
       if pieceClicked != None:
-        self.currentPieceIndex = row*8 + col
+        self.currentIndex = row*8 + col
         self.currentPiece = pieceClicked
         pieceColor = self.Piece.getColor(pieceClicked)
         pieceName = self.Piece.getPiece(pieceClicked)
+        if pieceColor != self.currentColor:
+          return
 
         if pieceName == "Queen":
           self.movePlates.LineMovePlate(self, pieceColor, (col, row), -1, -1)
@@ -142,6 +207,40 @@ class Board:
           self.movePlates.LineMovePlate(self, pieceColor, (col, row), -1, 1)
           self.movePlates.LineMovePlate(self, pieceColor, (col, row), 1, 1)
 
+        elif pieceName == "Pawn":
+          self.movePlates.PawnMovePlate(self, pieceColor, (col, row))
+
+        elif pieceName == "King":
+          self.movePlates.SingleMovePlate(self, pieceColor, (col, row), -1, -1)
+          self.movePlates.SingleMovePlate(self, pieceColor, (col, row), 0, -1)
+          self.movePlates.SingleMovePlate(self, pieceColor, (col, row), 1, -1)
+          self.movePlates.SingleMovePlate(self, pieceColor, (col, row), -1, 0)
+          self.movePlates.SingleMovePlate(self, pieceColor, (col, row), 1, 0)
+          self.movePlates.SingleMovePlate(self, pieceColor, (col, row), -1, 1)
+          self.movePlates.SingleMovePlate(self, pieceColor, (col, row), 0, 1)
+          self.movePlates.SingleMovePlate(self, pieceColor, (col, row), 1, 1)
+          if pieceColor == "white":
+            if self.canCastle[0]:
+              self.movePlates.Castle(self, pieceColor, (col, row), "Kingside")
+            if self.canCastle[1]:
+              self.movePlates.Castle(self, pieceColor, (col, row), "Queenside")
+          elif pieceColor == "black":
+            if self.canCastle[2]:
+              self.movePlates.Castle(self, pieceColor, (col, row), "Kingside")
+            if self.canCastle[3]:
+              self.movePlates.Castle(self, pieceColor, (col, row), "Queenside")
+
+        elif pieceName == "Knight":
+          self.movePlates.SingleMovePlate(self, pieceColor, (col, row), -1, -2)
+          self.movePlates.SingleMovePlate(self, pieceColor, (col, row), 1, -2)
+          self.movePlates.SingleMovePlate(self, pieceColor, (col, row), -2, -1)
+          self.movePlates.SingleMovePlate(self, pieceColor, (col, row), 2, -1)
+          self.movePlates.SingleMovePlate(self, pieceColor, (col, row), -2, 1)
+          self.movePlates.SingleMovePlate(self, pieceColor, (col, row), 2, 1)
+          self.movePlates.SingleMovePlate(self, pieceColor, (col, row), -1, 2)
+          self.movePlates.SingleMovePlate(self, pieceColor, (col, row), 1, 2)
+
+
 
         self.movePlates.moves = list(set(self.movePlates.moves))
 
@@ -164,5 +263,12 @@ Day 3(i think):
 created movement and capturing of pieces for queens, bishops, and rooks
 create capturing and movement of the rest of the pieces and create turns
 create special moves like moving twice from starting square, maybe en passant and castling
+
+Day 4:
+Created the movement for the rest of the pieces
+created castling
+need to fix being in check logic
+need to then add checkmate stalemate and finally restarting the game and keeping score
+
 
 '''
